@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -133,7 +134,9 @@ public abstract class AbstractOpProcessor implements OpProcessor {
                     // thread that processed the eval of the script so, we have to push serialization down into that
                     Frame frame = null;
                     try {
-                        frame = makeFrame(ctx, msg, serializer, useBinary, aggregate, code, generateMetaData(ctx, msg, code, itty));
+                        frame = makeFrame(ctx, msg, serializer, useBinary, aggregate, code,
+                                generateResultMetaData(ctx, msg, code, itty, settings),
+                                generateStatusAttributes(ctx, msg, code, itty, settings));
                     } catch (Exception ex) {
                         // a frame may use a Bytebuf which is a countable release - if it does not get written
                         // downstream it needs to be released here
@@ -218,23 +221,57 @@ public abstract class AbstractOpProcessor implements OpProcessor {
     }
 
     /**
-     * Generates meta-data to put on a {@link ResponseMessage}.
+     * Generates response result meta-data to put on a {@link ResponseMessage}.
+     *
+     * @param itty a reference to the current {@link Iterator} of results - it is not meant to be forwarded in
+     *             this method
+     * @deprecated As of release 3.3.2, replaced by {@link #generateResultMetaData(ChannelHandlerContext, RequestMessage, ResponseStatusCode, Iterator, Settings)}
+     */
+    @Deprecated
+    protected Map<String, Object> generateMetaData(final ChannelHandlerContext ctx, final RequestMessage msg,
+                                                   final ResponseStatusCode code, final Iterator itty) {
+        return Collections.emptyMap();
+    }
+
+    /**
+     * Generates response result meta-data to put on a {@link ResponseMessage}.
      *
      * @param itty a reference to the current {@link Iterator} of results - it is not meant to be forwarded in
      *             this method
      */
-    protected Map<String,Object> generateMetaData(final ChannelHandlerContext ctx, final RequestMessage msg,
-                                                  final ResponseStatusCode code, final Iterator itty) {
-        return Collections.emptyMap();
+    protected Map<String, Object> generateResultMetaData(final ChannelHandlerContext ctx, final RequestMessage msg,
+                                                         final ResponseStatusCode code, final Iterator itty,
+                                                         final Settings settings) {
+        return generateMetaData(ctx, msg, code, itty);
+    }
+
+    /**
+     * Generates response status meta-data to put on a {@link ResponseMessage}.
+     *
+     * @param itty a reference to the current {@link Iterator} of results - it is not meant to be forwarded in
+     *             this method
+     */
+    protected Map<String, Object> generateStatusAttributes(final ChannelHandlerContext ctx, final RequestMessage msg,
+                                                           final ResponseStatusCode code, final Iterator itty,
+                                                           final Settings settings) {
+        // only return server metadata on the last message
+        if (itty.hasNext()) return Collections.emptyMap();
+
+        final Map<String, Object> metaData = new HashMap<>();
+        metaData.put(Tokens.ARGS_HOST, ctx.channel().remoteAddress().toString());
+
+        return metaData;
     }
 
     protected static Frame makeFrame(final ChannelHandlerContext ctx, final RequestMessage msg,
                                      final MessageSerializer serializer, final boolean useBinary, final List<Object> aggregate,
-                                     final ResponseStatusCode code, final Map<String,Object> responseMetaData) throws Exception {
+                                     final ResponseStatusCode code, final Map<String,Object> responseMetaData
+                                     final Map<String,Object> statusAttributes) throws Exception {
         try {
             if (useBinary) {
                 return new Frame(serializer.serializeResponseAsBinary(ResponseMessage.build(msg)
                         .code(code)
+                        .statusAttributes(statusAttributes)
                         .responseMetaData(responseMetaData)
                         .result(aggregate).create(), ctx.alloc()));
             } else {
@@ -243,6 +280,7 @@ public abstract class AbstractOpProcessor implements OpProcessor {
                 final MessageTextSerializer textSerializer = (MessageTextSerializer) serializer;
                 return new Frame(textSerializer.serializeResponseAsString(ResponseMessage.build(msg)
                         .code(code)
+                        .statusAttributes(statusAttributes)
                         .responseMetaData(responseMetaData)
                         .result(aggregate).create()));
             }
