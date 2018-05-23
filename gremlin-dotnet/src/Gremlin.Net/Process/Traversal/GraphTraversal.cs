@@ -1377,6 +1377,15 @@ namespace Gremlin.Net.Process.Traversal
         }
 
         /// <summary>
+        ///     Adds the shortestPath step to this <see cref="GraphTraversal{SType, EType}" />.
+        /// </summary>
+        public GraphTraversal<S, Path> ShortestPath ()
+        {
+            Bytecode.AddStep("shortestPath");
+            return Wrap<S, Path>(this);
+        }
+
+        /// <summary>
         ///     Adds the sideEffect step to this <see cref="GraphTraversal{SType, EType}" />.
         /// </summary>
         public GraphTraversal<S, E> SideEffect (IConsumer consumer)
@@ -1691,15 +1700,6 @@ namespace Gremlin.Net.Process.Traversal
         public GraphTraversal<S, E> Where (ITraversal whereTraversal)
         {
             Bytecode.AddStep("where", whereTraversal);
-            return Wrap<S, E>(this);
-        }
-
-        /// <summary>
-        ///     Adds the with step to this <see cref="GraphTraversal{SType, EType}" />.
-        /// </summary>
-        public GraphTraversal<S, E> With (string key, object value)
-        {
-            Bytecode.AddStep("with", key, value);
             return Wrap<S, E>(this);
         }
 
